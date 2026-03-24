@@ -35,28 +35,29 @@ resource "aws_security_group" "alb" {
 # ============================================
 # UPDATE ECS SECURITY GROUPS TO ALLOW ALB
 # ============================================
+# NOTE: Commented out during destroy - uncomment when recreating
 
-# Allow ALB to communicate with backend
-resource "aws_security_group_rule" "backend_from_alb" {
-  type                     = "ingress"
-  from_port                = var.backend_container_port
-  to_port                  = var.backend_container_port
-  protocol                 = "tcp"
-  source_security_group_id = aws_security_group.alb.id
-  security_group_id        = data.terraform_remote_state.ecs.outputs.backend_security_group_id
-  description              = "Allow traffic from ALB to backend"
-}
+# # Allow ALB to communicate with backend
+# resource "aws_security_group_rule" "backend_from_alb" {
+#   type                     = "ingress"
+#   from_port                = var.backend_container_port
+#   to_port                  = var.backend_container_port
+#   protocol                 = "tcp"
+#   source_security_group_id = aws_security_group.alb.id
+#   security_group_id        = data.terraform_remote_state.ecs.outputs.backend_security_group_id
+#   description              = "Allow traffic from ALB to backend"
+# }
 
-# Allow ALB to communicate with frontend
-resource "aws_security_group_rule" "frontend_from_alb" {
-  type                     = "ingress"
-  from_port                = var.frontend_container_port
-  to_port                  = var.frontend_container_port
-  protocol                 = "tcp"
-  source_security_group_id = aws_security_group.alb.id
-  security_group_id        = data.terraform_remote_state.ecs.outputs.frontend_security_group_id
-  description              = "Allow traffic from ALB to frontend"
-}
+# # Allow ALB to communicate with frontend
+# resource "aws_security_group_rule" "frontend_from_alb" {
+#   type                     = "ingress"
+#   from_port                = var.frontend_container_port
+#   to_port                  = var.frontend_container_port
+#   protocol                 = "tcp"
+#   source_security_group_id = aws_security_group.alb.id
+#   security_group_id        = data.terraform_remote_state.ecs.outputs.frontend_security_group_id
+#   description              = "Allow traffic from ALB to frontend"
+# }
 
 # ============================================
 # APPLICATION LOAD BALANCER
