@@ -353,7 +353,7 @@ resource "aws_ecs_task_definition" "frontend" {
         },
         {
           name  = "NEXT_PUBLIC_API_URL"
-          value = "http://backend:${var.backend_container_port}"
+          value = "http://${data.terraform_remote_state.alb.outputs.alb_dns_name}"
         }
       ]
 
@@ -400,6 +400,13 @@ resource "aws_ecs_service" "backend" {
     assign_public_ip = false
   }
 
+  # Attach to ALB target group
+  load_balancer {
+    target_group_arn = data.terraform_remote_state.alb.outputs.backend_target_group_arn
+    container_name   = var.backend_container_name
+    container_port   = var.backend_container_port
+  }
+
   deployment_maximum_percent         = 200
   deployment_minimum_healthy_percent = 100
 
@@ -407,6 +414,9 @@ resource "aws_ecs_service" "backend" {
     enable   = true
     rollback = true
   }
+
+  # Ensure ALB target group exists before creating service
+  depends_on = [data.terraform_remote_state.alb]
 
   tags = {
     Name = "${var.project_name}-${var.environment}-backend-service"
@@ -428,6 +438,13 @@ resource "aws_ecs_service" "frontend" {
     assign_public_ip = false
   }
 
+  # Attach to ALB target group
+  load_balancer {
+    target_group_arn = data.terraform_remote_state.alb.outputs.frontend_target_group_arn
+    container_name   = var.frontend_container_name
+    container_port   = var.frontend_container_port
+  }
+
   deployment_maximum_percent         = 200
   deployment_minimum_healthy_percent = 100
 
@@ -435,6 +452,9 @@ resource "aws_ecs_service" "frontend" {
     enable   = true
     rollback = true
   }
+
+  # Ensure ALB target group exists before creating service
+  depends_on = [data.terraform_remote_state.alb]
 
   tags = {
     Name = "${var.project_name}-${var.environment}-frontend-service"

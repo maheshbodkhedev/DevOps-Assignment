@@ -79,7 +79,7 @@ variable "health_check_path_frontend" {
 variable "health_check_path_backend" {
   description = "Health check path for backend"
   type        = string
-  default     = "/health"
+  default     = "/api/health"
 }
 
 variable "health_check_interval" {

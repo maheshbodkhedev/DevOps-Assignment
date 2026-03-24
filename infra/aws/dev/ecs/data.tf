@@ -12,6 +12,18 @@ data "terraform_remote_state" "networking" {
   }
 }
 
+# Reference ALB infrastructure from Phase 3
+data "terraform_remote_state" "alb" {
+  backend = "s3"
+
+  config = {
+    bucket  = "mahesh-tf-state-2026-devops"
+    key     = "dev/alb/terraform.tfstate"
+    region  = "ap-south-1"
+    profile = "devops"
+  }
+}
+
 # Get AWS account ID for IAM roles
 data "aws_caller_identity" "current" {}
 

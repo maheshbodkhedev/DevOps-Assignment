@@ -65,9 +65,9 @@ variable "backend_container_port" {
 }
 
 variable "backend_image" {
-  description = "Docker image for backend (placeholder)"
+  description = "Docker image for backend from ECR"
   type        = string
-  default     = "nginx:latest"  # Placeholder - will be replaced with ECR image
+  default     = "376276261481.dkr.ecr.ap-south-1.amazonaws.com/fullstack-app-dev-backend:latest"
 }
 
 variable "backend_cpu" {
@@ -111,9 +111,9 @@ variable "frontend_container_port" {
 }
 
 variable "frontend_image" {
-  description = "Docker image for frontend (placeholder)"
+  description = "Docker image for frontend from ECR"
   type        = string
-  default     = "nginx:latest"  # Placeholder - will be replaced with ECR image
+  default     = "376276261481.dkr.ecr.ap-south-1.amazonaws.com/fullstack-app-dev-frontend:latest"
 }
 
 variable "frontend_cpu" {
