@@ -1,0 +1,70 @@
+%%{init: {'theme':'base', 'themeVariables': { 'primaryColor':'#ff9900','primaryTextColor':'#000','primaryBorderColor':'#000','lineColor':'#666','secondaryColor':'#00a4bd','tertiaryColor':'#e1f5ff'}}}%%
+
+graph TB
+    subgraph Internet
+        Users[👥 Users]
+    end
+
+    subgraph "AWS Cloud - Region: ap-south-1"
+        subgraph "VPC (10.0.0.0/16)"
+            subgraph "Public Subnets (2 AZs)"
+                ALB[Application Load Balancer<br/>Path-based routing<br/>/ → Frontend<br/>/api/* → Backend]
+                NAT[NAT Gateway]
+                IGW[Internet Gateway]
+            end
+
+            subgraph "Private Subnets (2 AZs)"
+                subgraph "ECS Fargate Cluster"
+                    Frontend[Frontend Service<br/>Next.js on port 3000<br/>Desired: 1 task]
+                    Backend[Backend Service<br/>FastAPI on port 8000<br/>Desired: 1 task]
+                end
+            end
+        end
+
+        subgraph "Container Registry"
+            ECR[Amazon ECR<br/>Docker Images<br/>SHA-tagged versions]
+        end
+
+        subgraph "State Management"
+            S3[S3 Bucket<br/>Terraform State]
+            DynamoDB[DynamoDB<br/>State Lock]
+        end
+
+        subgraph "Monitoring"
+            CloudWatch[CloudWatch Logs<br/>Container logs]
+        end
+    end
+
+    subgraph "CI/CD Pipeline"
+        GitHub[GitHub Repository<br/>Code + IaC]
+        Actions[GitHub Actions<br/>Automated Pipeline]
+    end
+
+    Users -->|HTTPS/HTTP| ALB
+    ALB -->|Route /| Frontend
+    ALB -->|Route /api/*| Backend
+    Frontend -.->|Pull images| ECR
+    Backend -.->|Pull images| ECR
+    Frontend -.->|Logs| CloudWatch
+    Backend -.->|Logs| CloudWatch
+    NAT -.->|Internet access| Frontend
+    NAT -.->|Internet access| Backend
+    IGW -->|Public traffic| ALB
+
+    GitHub -->|Push to main| Actions
+    Actions -->|Build & Push| ECR
+    Actions -->|Update| Frontend
+    Actions -->|Update| Backend
+    Actions -.->|Read/Write| S3
+    Actions -.->|Lock| DynamoDB
+
+    style Users fill:#e1f5ff
+    style ALB fill:#ff9900
+    style Frontend fill:#00a4bd
+    style Backend fill:#00a4bd
+    style ECR fill:#ff9900
+    style GitHub fill:#24292e
+    style Actions fill:#2088ff
+    style CloudWatch fill:#ff9900
+    style S3 fill:#ff9900
+    style DynamoDB fill:#ff9900
