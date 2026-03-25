@@ -12,6 +12,8 @@ env:
   ECS_CLUSTER: fullstack-app-dev-fullstack-cluster
   ECS_SERVICE_BACKEND: backend-service
   ECS_SERVICE_FRONTEND: frontend-service
+  ECS_TASK_DEFINITION_BACKEND: fullstack-app-dev-backend-service
+  ECS_TASK_DEFINITION_FRONTEND: fullstack-app-dev-frontend-service
   BACKEND_CONTAINER_NAME: backend
   FRONTEND_CONTAINER_NAME: frontend
 
@@ -100,7 +102,7 @@ jobs:
       - name: Download backend task definition
         run: |
           aws ecs describe-task-definition \
-            --task-definition ${{ env.ECS_SERVICE_BACKEND }} \
+            --task-definition ${{ env.ECS_TASK_DEFINITION_BACKEND }} \
             --query taskDefinition \
             --region ${{ env.AWS_REGION }} > backend-task-def.json
 
@@ -134,7 +136,7 @@ jobs:
       - name: Download frontend task definition
         run: |
           aws ecs describe-task-definition \
-            --task-definition ${{ env.ECS_SERVICE_FRONTEND }} \
+            --task-definition ${{ env.ECS_TASK_DEFINITION_FRONTEND }} \
             --query taskDefinition \
             --region ${{ env.AWS_REGION }} > frontend-task-def.json
 
