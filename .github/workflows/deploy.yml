@@ -1,0 +1,243 @@
+name: Deploy to AWS ECS
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  AWS_REGION: ap-south-1
+  ECR_BACKEND_REPOSITORY: fullstack-app-dev-backend
+  ECR_FRONTEND_REPOSITORY: fullstack-app-dev-frontend
+  ECS_CLUSTER: fullstack-app-dev-fullstack-cluster
+  ECS_SERVICE_BACKEND: backend-service
+  ECS_SERVICE_FRONTEND: frontend-service
+  BACKEND_CONTAINER_NAME: backend
+  FRONTEND_CONTAINER_NAME: frontend
+
+jobs:
+  deploy:
+    name: Build and Deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      # ============================================
+      # 1. CHECKOUT CODE
+      # ============================================
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # ============================================
+      # 2. CONFIGURE AWS CREDENTIALS
+      # ============================================
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # ============================================
+      # 3. LOGIN TO AMAZON ECR
+      # ============================================
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # ============================================
+      # 4. BUILD, TAG, AND PUSH BACKEND IMAGE
+      # ============================================
+      - name: Build backend Docker image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build \
+            -t $ECR_REGISTRY/$ECR_BACKEND_REPOSITORY:$IMAGE_TAG \
+            -t $ECR_REGISTRY/$ECR_BACKEND_REPOSITORY:latest \
+            ./backend
+
+          echo "✅ Backend image built: $ECR_REGISTRY/$ECR_BACKEND_REPOSITORY:$IMAGE_TAG"
+
+      - name: Push backend image to ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker push $ECR_REGISTRY/$ECR_BACKEND_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_BACKEND_REPOSITORY:latest
+          echo "✅ Backend image pushed to ECR"
+
+      # ============================================
+      # 5. BUILD, TAG, AND PUSH FRONTEND IMAGE
+      # ============================================
+      - name: Build frontend Docker image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+          API_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
+        run: |
+          docker build \
+            --build-arg NEXT_PUBLIC_API_URL=$API_URL \
+            -t $ECR_REGISTRY/$ECR_FRONTEND_REPOSITORY:$IMAGE_TAG \
+            -t $ECR_REGISTRY/$ECR_FRONTEND_REPOSITORY:latest \
+            ./frontend
+
+          echo "✅ Frontend image built: $ECR_REGISTRY/$ECR_FRONTEND_REPOSITORY:$IMAGE_TAG"
+
+      - name: Push frontend image to ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker push $ECR_REGISTRY/$ECR_FRONTEND_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_FRONTEND_REPOSITORY:latest
+          echo "✅ Frontend image pushed to ECR"
+
+      # ============================================
+      # 6. DOWNLOAD CURRENT BACKEND TASK DEFINITION
+      # ============================================
+      - name: Download backend task definition
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition ${{ env.ECS_SERVICE_BACKEND }} \
+            --query taskDefinition \
+            --region ${{ env.AWS_REGION }} > backend-task-def.json
+
+          echo "✅ Backend task definition downloaded"
+
+      # ============================================
+      # 7. UPDATE BACKEND TASK DEFINITION WITH NEW IMAGE
+      # ============================================
+      - name: Update backend task definition
+        id: backend-task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: backend-task-def.json
+          container-name: ${{ env.BACKEND_CONTAINER_NAME }}
+          image: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_BACKEND_REPOSITORY }}:${{ github.sha }}
+
+      # ============================================
+      # 8. DEPLOY BACKEND TO ECS
+      # ============================================
+      - name: Deploy backend to ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.backend-task-def.outputs.task-definition }}
+          service: ${{ env.ECS_SERVICE_BACKEND }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: true
+
+      # ============================================
+      # 9. DOWNLOAD CURRENT FRONTEND TASK DEFINITION
+      # ============================================
+      - name: Download frontend task definition
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition ${{ env.ECS_SERVICE_FRONTEND }} \
+            --query taskDefinition \
+            --region ${{ env.AWS_REGION }} > frontend-task-def.json
+
+          echo "✅ Frontend task definition downloaded"
+
+      # ============================================
+      # 10. UPDATE FRONTEND TASK DEFINITION WITH NEW IMAGE
+      # ============================================
+      - name: Update frontend task definition
+        id: frontend-task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: frontend-task-def.json
+          container-name: ${{ env.FRONTEND_CONTAINER_NAME }}
+          image: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_FRONTEND_REPOSITORY }}:${{ github.sha }}
+
+      # ============================================
+      # 11. DEPLOY FRONTEND TO ECS
+      # ============================================
+      - name: Deploy frontend to ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.frontend-task-def.outputs.task-definition }}
+          service: ${{ env.ECS_SERVICE_FRONTEND }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: true
+
+      # ============================================
+      # 12. VERIFY DEPLOYMENT
+      # ============================================
+      - name: Verify deployment
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          echo "=========================================="
+          echo "🎉 DEPLOYMENT COMPLETED SUCCESSFULLY"
+          echo "=========================================="
+          echo ""
+          echo "📦 Deployed images:"
+          echo "  Backend:  $ECR_REGISTRY/$ECR_BACKEND_REPOSITORY:$IMAGE_TAG"
+          echo "  Frontend: $ECR_REGISTRY/$ECR_FRONTEND_REPOSITORY:$IMAGE_TAG"
+          echo ""
+          echo "🚀 ECS services stable:"
+          echo "  ✅ $ECS_SERVICE_BACKEND"
+          echo "  ✅ $ECS_SERVICE_FRONTEND"
+          echo ""
+          echo "🔍 Verifying running tasks..."
+
+          # Get backend task image
+          BACKEND_TASK=$(aws ecs list-tasks \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --service-name ${{ env.ECS_SERVICE_BACKEND }} \
+            --desired-status RUNNING \
+            --region ${{ env.AWS_REGION }} \
+            --query 'taskArns[0]' \
+            --output text)
+
+          BACKEND_IMAGE=$(aws ecs describe-tasks \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --tasks $BACKEND_TASK \
+            --region ${{ env.AWS_REGION }} \
+            --query 'tasks[0].containers[0].image' \
+            --output text)
+
+          # Get frontend task image
+          FRONTEND_TASK=$(aws ecs list-tasks \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --service-name ${{ env.ECS_SERVICE_FRONTEND }} \
+            --desired-status RUNNING \
+            --region ${{ env.AWS_REGION }} \
+            --query 'taskArns[0]' \
+            --output text)
+
+          FRONTEND_IMAGE=$(aws ecs describe-tasks \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --tasks $FRONTEND_TASK \
+            --region ${{ env.AWS_REGION }} \
+            --query 'tasks[0].containers[0].image' \
+            --output text)
+
+          echo ""
+          echo "📋 Running task images:"
+          echo "  Backend:  $BACKEND_IMAGE"
+          echo "  Frontend: $FRONTEND_IMAGE"
+          echo ""
+
+          # Verify images match
+          if [[ "$BACKEND_IMAGE" == *"$IMAGE_TAG"* ]]; then
+            echo "✅ Backend running correct version ($IMAGE_TAG)"
+          else
+            echo "⚠️  Backend image mismatch!"
+            exit 1
+          fi
+
+          if [[ "$FRONTEND_IMAGE" == *"$IMAGE_TAG"* ]]; then
+            echo "✅ Frontend running correct version ($IMAGE_TAG)"
+          else
+            echo "⚠️  Frontend image mismatch!"
+            exit 1
+          fi
+
+          echo ""
+          echo "=========================================="
+          echo "🎊 All services deployed and verified!"
+          echo "=========================================="
